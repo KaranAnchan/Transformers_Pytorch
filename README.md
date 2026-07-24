@@ -2,7 +2,7 @@
 
 # EN → HI // TRANSLATION TRANSFORMER
 
-**A 6-layer Transformer built from scratch in PyTorch — no `nn.Transformer`, no `transformers` — trained English→Hindi on AI4Bharat Samanantar.**
+**A 6-layer English-to-Hindi Transformer built directly in PyTorch, without `nn.Transformer` or `transformers`, and trained on AI4Bharat Samanantar.**
 
 ![paper](https://img.shields.io/badge/arch-Attention_Is_All_You_Need-7aa2f7?style=flat-square&labelColor=0b0e14)
 ![framework](https://img.shields.io/badge/PyTorch-cu128-ffb454?style=flat-square&labelColor=0b0e14)
@@ -14,7 +14,11 @@
 
 ---
 
-A 6-layer Transformer (Vaswani et al., 2017) implemented **from scratch in PyTorch** and trained on AI4Bharat's [Samanantar](https://huggingface.co/datasets/ai4bharat/samanantar) parallel corpus. Ships with a length-normalized beam-search decoder, a frozen held-out test set, an honest evaluation pipeline, and a Gradio app with live attention visualization.
+This is a 6-layer implementation of the Transformer from Vaswani et al. (2017), written directly
+in PyTorch and trained on AI4Bharat's
+[Samanantar](https://huggingface.co/datasets/ai4bharat/samanantar) parallel corpus. The repository
+includes length-normalized beam search, a frozen held-out test set, the evaluation pipeline, and
+a Gradio app that displays attention during decoding.
 
 ```
 EN  ▶  Good morning, how are you today?          HI  ▶  अच्छा, आज आप कैसे हैं?
@@ -30,7 +34,7 @@ python app.py   # Gradio UI with attention heatmap, http://127.0.0.1:7860
   <img src="decode_live.webp" width="640"
        alt="Greedy decode generating Hindi token by token while cross-attention sweeps the English source">
   <br>
-  <em>Greedy decode, live — each Hindi token lights up the English words the decoder is attending to (cross-attention, layer 5, head-average).</em>
+  <em>During greedy decoding, each Hindi token highlights the English words receiving cross-attention in layer 5, averaged across heads.</em>
 </p>
 
 ## Results
@@ -44,11 +48,16 @@ Evaluated on 500 pairs from the frozen 5,000-pair held-out test set (never touch
 
 Full report in [`results/eval_report.json`](results/eval_report.json); every prediction in [`results/predictions.tsv`](results/predictions.tsv).
 
-> **BLEU vs. chrF++.** Samanantar's references are paraphrastic web-mined translations, not literal renditions, so BLEU penalizes valid synonym choices that chrF++ credits. chrF++ ≈ 41 with hand-checked sample quality is the meaningful signal.
+> **BLEU vs. chrF++.** Samanantar contains paraphrastic, web-mined references rather than literal
+> translations. BLEU can penalize valid synonym choices that chrF++ still credits. For that reason,
+> the chrF++ score of roughly 41 is read alongside hand-checked samples.
 
 ### What beam search actually buys
 
-Per-sentence analysis over all 500 test pairs: beam's +0.2 corpus chrF++ is a **two-way rewrite**, not a uniform upgrade — 162 sentences improve, 140 get worse (swings up to ±43 chrF++), with no reliable length effect — at 9.3× the latency. Greedy ships with the demo; beam is for offline batches.
+Across all 500 test pairs, beam search adds 0.2 corpus chrF++, but the change is not uniform.
+It improves 162 sentences and worsens 140, with swings as large as ±43 chrF++. There is no
+reliable length effect, and latency increases by 9.3×. The demo therefore uses greedy decoding;
+beam search is available for offline batches.
 
 <p align="center">
   <picture>
@@ -77,7 +86,8 @@ Per-sentence analysis over all 500 test pairs: beam's +0.2 corpus chrF++ is a **
 
 ## Qualitative samples
 
-Auto-selected from `results/predictions.tsv` by `pick_samples.py` (top-chrF and length-bucket winners — no manual cherry-picking):
+`pick_samples.py` selects these examples from `results/predictions.tsv` using top-chrF scores and
+length buckets. They were not selected manually.
 
 | Source (English) | Beam (k = 4) | chrF++ |
 | --- | --- | ---: |
@@ -89,7 +99,9 @@ More in [`results/qualitative_samples.md`](results/qualitative_samples.md).
 
 ### Where the model looks
 
-Decoder **cross-attention** shows, for every Hindi token, which English tokens the model aligned to — e.g. Head 3 of layer 5 aligns "Art*" with "आर्ट", Head 2 lines up "intelligence" with "इंटेलिजेंस".
+Decoder **cross-attention** shows which English tokens align with each Hindi token. For example,
+head 3 in layer 5 aligns "Art*" with "आर्ट", while head 2 aligns "intelligence" with
+"इंटेलिजेंस".
 
 <p align="center">
   <picture>
@@ -127,7 +139,9 @@ Reproduce end-to-end:
 python run_all.py     # idempotent: train → eval → plots (skips training if a checkpoint exists)
 ```
 
-Scope is set in `config.py` — `max_train_examples` (`None` = full 10M Samanantar, default `500_000`), plus `num_epochs`, `d_model`, etc.
+Training scope is set in `config.py`. `max_train_examples` defaults to `500_000`; setting it to
+`None` uses the full 10M-example Samanantar dataset. The same file contains `num_epochs`,
+`d_model`, and the other main settings.
 
 ## Repository layout
 
@@ -145,7 +159,12 @@ run_all.py · config.py   one-command pipeline · hyperparameter source of truth
 
 ## What changed across the rebuild
 
-The original 2024 version trained on the [IITB En-Hi corpus](https://huggingface.co/datasets/cfilt/iitb-english-hindi) with a word-level tokenizer and reported a misleadingly high BLEU on a tiny 5-sentence in-loop slice — a mirage: word-level BPE without a ByteLevel decoder dropped spaces at decode time (zero n-gram overlap on a real test set), and IITB is bimodal (UI strings + religious text) so the model couldn't translate everyday English. The rebuild swaps in Samanantar and retrains with a paper-faithful recipe.
+The original 2024 version trained on the
+[IITB En-Hi corpus](https://huggingface.co/datasets/cfilt/iitb-english-hindi) with a word-level
+tokenizer and reported BLEU on five in-loop examples. That result did not survive a proper test
+set. Word-level BPE without a ByteLevel decoder dropped spaces during decoding, producing zero
+n-gram overlap on the held-out data. IITB also mixes UI strings with religious text, which made
+everyday English a poor fit. This rebuild uses Samanantar and follows the paper's training recipe.
 
 | | Old (2024) | New |
 | --- | --- | --- |
@@ -157,14 +176,18 @@ The original 2024 version trained on the [IITB En-Hi corpus](https://huggingface
 | Checkpoint | last epoch | **highest validation chrF++** |
 | "Good morning, how are you?" | nonsense | **"अच्छा, आज आप कैसे हैं?"** |
 
-## Honest caveats
+## Limitations
 
-- **The metrics are a lower bound** — `sacrebleu` as-is, no Indic morphological normalization; paraphrastic references cost BLEU points.
-- **Training was deliberately bounded** — 500k of 10M pairs, 8 epochs on one 12 GB GPU (~3 h). Uncap `max_train_examples` and the recipe scales cleanly.
-- **Production systems are far ahead** — [IndicTrans2](https://github.com/AI4Bharat/IndicTrans2) trains on the full 10M with larger models. The point here is the from-scratch architecture and end-to-end pipeline, not a benchmark number.
+- `sacrebleu` is used without Indic morphological normalization, so paraphrastic references can
+  lower BLEU even when a translation is reasonable.
+- Training used 500k of the 10M available pairs for 8 epochs on one 12 GB GPU, taking roughly
+  three hours. Set `max_train_examples` to `None` to use the full dataset.
+- [IndicTrans2](https://github.com/AI4Bharat/IndicTrans2) uses the full 10M pairs and larger
+  models. This repository is an implementation and evaluation study, not a claim to match a
+  production translation system.
 
 ## References
 
 [Attention Is All You Need](https://arxiv.org/abs/1706.03762) (Vaswani et al., 2017) · [GNMT length penalty](https://arxiv.org/abs/1609.08144) (Wu et al., 2016) · [byte-level BPE / GPT-2](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf) · [Samanantar](https://indicnlp.ai4bharat.org/samanantar/) (AI4Bharat)
 
-MIT — see [`LICENSE`](LICENSE).
+Released under the [MIT License](LICENSE).
